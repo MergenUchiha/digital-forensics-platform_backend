@@ -1,21 +1,21 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Req, UsePipes } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { ZodValidationPipe } from 'nestjs-zod';
 import { EvidenceService } from './evidence.service';
-import { CreateEvidenceDto } from './dto/evidence.dto';
+import { CreateEvidenceSchema, CreateEvidenceInput } from './dto/evidence.dto';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
 @ApiTags('Evidence')
 @Controller('evidence')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-@UsePipes(ZodValidationPipe)
 export class EvidenceController {
   constructor(private evidenceService: EvidenceService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create evidence' })
-  async create(@Body() dto: CreateEvidenceDto, @Req() req) {
+  @UsePipes(new ZodValidationPipe(CreateEvidenceSchema))
+  async create(@Body() dto: CreateEvidenceInput, @Req() req) {
     return this.evidenceService.create(dto, req.user.id);
   }
 

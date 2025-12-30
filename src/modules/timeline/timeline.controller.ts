@@ -1,31 +1,21 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-  UsePipes,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, UsePipes } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { ZodValidationPipe } from 'nestjs-zod';
 import { TimelineService } from './timeline.service';
-import { CreateTimelineEventDto } from './dto/timeline.dto';
+import { CreateTimelineEventSchema, CreateTimelineEventInput } from './dto/timeline.dto';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
 @ApiTags('Timeline')
 @Controller('timeline')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-@UsePipes(ZodValidationPipe)
 export class TimelineController {
   constructor(private timelineService: TimelineService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create timeline event' })
-  async create(@Body() dto: CreateTimelineEventDto) {
+  @UsePipes(new ZodValidationPipe(CreateTimelineEventSchema))
+  async create(@Body() dto: CreateTimelineEventInput) {
     return this.timelineService.create(dto);
   }
 

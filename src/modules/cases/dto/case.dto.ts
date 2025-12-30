@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { createZodDto } from 'nestjs-zod';
 
 // Location Schema
 const LocationSchema = z.object({
@@ -29,10 +28,6 @@ export const UpdateCaseSchema = z.object({
   tags: z.array(z.string()).optional(),
   assignedToId: z.string().uuid().optional(),
 });
-
-// Export DTOs
-export class CreateCaseDto extends createZodDto(CreateCaseSchema) {}
-export class UpdateCaseDto extends createZodDto(UpdateCaseSchema) {}
 
 // Types
 export type CreateCaseInput = z.infer<typeof CreateCaseSchema>;

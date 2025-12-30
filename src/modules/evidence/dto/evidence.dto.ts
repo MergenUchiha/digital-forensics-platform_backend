@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { createZodDto } from 'nestjs-zod';
 
 // Create Evidence Schema
 export const CreateEvidenceSchema = z.object({
@@ -23,10 +22,6 @@ export const UpdateEvidenceSchema = z.object({
   description: z.string().optional(),
   metadata: z.record(z.any()).optional(),
 });
-
-// Export DTOs
-export class CreateEvidenceDto extends createZodDto(CreateEvidenceSchema) {}
-export class UpdateEvidenceDto extends createZodDto(UpdateEvidenceSchema) {}
 
 // Types
 export type CreateEvidenceInput = z.infer<typeof CreateEvidenceSchema>;
