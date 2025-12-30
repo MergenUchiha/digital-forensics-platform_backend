@@ -1,21 +1,21 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, UsePipes } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { ZodValidationPipe } from 'nestjs-zod';
 import { CasesService } from './cases.service';
-import { CreateCaseDto, UpdateCaseDto } from './dto/case.dto';
+import { CreateCaseSchema, UpdateCaseSchema, CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
 @ApiTags('Cases')
 @Controller('cases')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-@UsePipes(ZodValidationPipe)
 export class CasesController {
   constructor(private casesService: CasesService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create new case' })
-  async create(@Body() dto: CreateCaseDto, @Req() req) {
+  @UsePipes(new ZodValidationPipe(CreateCaseSchema))
+  async create(@Body() dto: CreateCaseInput, @Req() req) {
     return this.casesService.create(dto, req.user.id);
   }
 
@@ -33,7 +33,8 @@ export class CasesController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update case' })
-  async update(@Param('id') id: string, @Body() dto: UpdateCaseDto) {
+  @UsePipes(new ZodValidationPipe(UpdateCaseSchema))
+  async update(@Param('id') id: string, @Body() dto: UpdateCaseInput) {
     return this.casesService.update(id, dto);
   }
 

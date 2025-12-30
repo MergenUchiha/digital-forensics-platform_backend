@@ -1,19 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateCaseDto, UpdateCaseDto } from './dto/case.dto';
+import { CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
 import { CaseStatus, Severity } from '@prisma/client';
 
 @Injectable()
 export class CasesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateCaseDto, userId: string) {
+  async create(dto: CreateCaseInput, userId: string) {
     return this.prisma.case.create({
       data: {
         title: dto.title,
         description: dto.description,
         severity: dto.severity as Severity,
-        status: dto.status as CaseStatus || CaseStatus.OPEN,
+        status: (dto.status as CaseStatus) || CaseStatus.OPEN,
         tags: dto.tags || [],
         locationCity: dto.location?.city,
         locationCountry: dto.location?.country,
@@ -72,7 +72,7 @@ export class CasesService {
     return caseData;
   }
 
-  async update(id: string, dto: UpdateCaseDto) {
+  async update(id: string, dto: UpdateCaseInput) {
     await this.findOne(id); // Check if exists
 
     return this.prisma.case.update({

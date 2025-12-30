@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { createZodDto } from 'nestjs-zod';
 
 // Create Timeline Event Schema
 export const CreateTimelineEventSchema = z.object({
@@ -32,18 +31,6 @@ export const UpdateTimelineEventSchema = z.object({
   metadata: z.record(z.any()).optional(),
 });
 
-// Export DTOs
-export class CreateTimelineEventDto extends createZodDto(
-  CreateTimelineEventSchema,
-) {}
-export class UpdateTimelineEventDto extends createZodDto(
-  UpdateTimelineEventSchema,
-) {}
-
 // Types
-export type CreateTimelineEventInput = z.infer<
-  typeof CreateTimelineEventSchema
->;
-export type UpdateTimelineEventInput = z.infer<
-  typeof UpdateTimelineEventSchema
->;
+export type CreateTimelineEventInput = z.infer<typeof CreateTimelineEventSchema>;
+export type UpdateTimelineEventInput = z.infer<typeof UpdateTimelineEventSchema>;
