@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
@@ -18,5 +18,24 @@ export class UsersController {
   @Get()
   async findAll() {
     return this.usersService.findAll();
+  }
+
+  @Put('me')
+  async updateProfile(@Req() req, @Body() body: { name?: string }) {
+    console.log('Updating profile for user:', req.user.id, body);
+    return this.usersService.updateProfile(req.user.id, body);
+  }
+
+  @Put('me/password')
+  async changePassword(
+    @Req() req,
+    @Body() body: { currentPassword: string; newPassword: string }
+  ) {
+    console.log('Changing password for user:', req.user.id);
+    return this.usersService.changePassword(
+      req.user.id,
+      body.currentPassword,
+      body.newPassword
+    );
   }
 }

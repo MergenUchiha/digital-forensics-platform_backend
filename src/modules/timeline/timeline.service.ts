@@ -36,10 +36,30 @@ export class TimelineService {
   }
 
   async findAll(caseId?: string, severity?: string) {
+    // Нормализуем severity к верхнему регистру если передан
+    const normalizedSeverity = severity ? severity.toUpperCase() : undefined;
+    
+    // Проверяем валидность severity
+    const validSeverities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+    if (normalizedSeverity && !validSeverities.includes(normalizedSeverity)) {
+      // Если severity невалиден, игнорируем его
+      return this.prisma.timelineEvent.findMany({
+        where: {
+          ...(caseId && { caseId }),
+        },
+        include: {
+          case: {
+            select: { id: true, title: true },
+          },
+        },
+        orderBy: { timestamp: 'desc' },
+      });
+    }
+
     return this.prisma.timelineEvent.findMany({
       where: {
         ...(caseId && { caseId }),
-        ...(severity && { severity: severity as Severity }),
+        ...(normalizedSeverity && { severity: normalizedSeverity as Severity }),
       },
       include: {
         case: {
