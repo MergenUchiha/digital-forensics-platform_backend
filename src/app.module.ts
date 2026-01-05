@@ -7,6 +7,7 @@ import { EvidenceModule } from './modules/evidence/evidence.module';
 import { TimelineModule } from './modules/timeline/timeline.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { UsersModule } from './modules/users/users.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { UsersModule } from './modules/users/users.module';
     EvidenceModule, 
     TimelineModule, 
     AnalyticsModule, 
-    UsersModule
+    UsersModule,
+    NotificationsModule,
   ],
   controllers: [],
   providers: [],
