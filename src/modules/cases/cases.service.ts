@@ -1,22 +1,60 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// src/modules/cases/cases.service.ts
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
 import { CaseStatus, Severity } from '@prisma/client';
 
 @Injectable()
 export class CasesService {
+  private readonly logger = new Logger(CasesService.name);
+
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Normalize enum value to match Prisma schema
+   */
+  private normalizeEnum<T extends string>(
+    value: string | undefined,
+    validValues: readonly T[],
+    enumName: string,
+  ): T | undefined {
+    if (!value) return undefined;
+
+    const normalized = value.toUpperCase() as T;
+
+    if (!validValues.includes(normalized)) {
+      throw new BadRequestException(
+        `Invalid ${enumName}: ${value}. Valid values are: ${validValues.join(', ')}`,
+      );
+    }
+
+    return normalized;
+  }
+
   async create(dto: CreateCaseInput, userId: string) {
+    this.logger.log(`Creating case: ${dto.title}`);
+
+    const severity = this.normalizeEnum(
+      dto.severity,
+      ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const,
+      'severity',
+    );
+
+    const status = this.normalizeEnum(
+      dto.status || 'OPEN',
+      ['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED'] as const,
+      'status',
+    );
+
     return this.prisma.case.create({
       data: {
-        title: dto.title,
-        description: dto.description,
-        severity: dto.severity as Severity,
-        status: (dto.status as CaseStatus) || CaseStatus.OPEN,
-        tags: dto.tags || [],
-        locationCity: dto.location?.city,
-        locationCountry: dto.location?.country,
+        title: dto.title.trim(),
+        description: dto.description.trim(),
+        severity: severity!,
+        status: status!,
+        tags: dto.tags?.map((tag) => tag.trim()) || [],
+        locationCity: dto.location?.city?.trim(),
+        locationCountry: dto.location?.country?.trim(),
         locationLat: dto.location?.lat,
         locationLng: dto.location?.lng,
         createdById: userId,
@@ -34,25 +72,18 @@ export class CasesService {
   }
 
   async findAll(status?: string) {
-    const normalizedStatus = status ? status.toUpperCase() : undefined;
-    const validStatuses = ['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED'];
-    
-    if (normalizedStatus && !validStatuses.includes(normalizedStatus)) {
-      return this.prisma.case.findMany({
-        include: {
-          createdBy: {
-            select: { id: true, name: true, email: true, role: true },
-          },
-          assignedTo: {
-            select: { id: true, name: true, email: true, role: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
+    this.logger.debug(`Finding all cases with status: ${status || 'all'}`);
+
+    const normalizedStatus = status
+      ? this.normalizeEnum(
+          status,
+          ['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED'] as const,
+          'status',
+        )
+      : undefined;
 
     return this.prisma.case.findMany({
-      where: normalizedStatus ? { status: normalizedStatus as CaseStatus } : undefined,
+      where: normalizedStatus ? { status: normalizedStatus } : undefined,
       include: {
         createdBy: {
           select: { id: true, name: true, email: true, role: true },
@@ -66,6 +97,8 @@ export class CasesService {
   }
 
   async findOne(id: string) {
+    this.logger.debug(`Finding case: ${id}`);
+
     const caseData = await this.prisma.case.findUnique({
       where: { id },
       include: {
@@ -97,120 +130,126 @@ export class CasesService {
     });
 
     if (!caseData) {
-      throw new NotFoundException('Case not found');
+      throw new NotFoundException(`Case with ID ${id} not found`);
     }
 
     return caseData;
   }
 
   async update(id: string, dto: UpdateCaseInput) {
-    console.log('📝 CasesService.update called');
-    console.log('Case ID:', id);
-    console.log('DTO received:', JSON.stringify(dto, null, 2));
-    
-    // Проверяем существование кейса
-    const existingCase = await this.prisma.case.findUnique({
-      where: { id },
-    });
+    this.logger.log(`Updating case: ${id}`);
+    this.logger.debug(`Update data: ${JSON.stringify(dto)}`);
 
-    if (!existingCase) {
-      console.error('❌ Case not found:', id);
-      throw new NotFoundException('Case not found');
-    }
+    // Check if case exists
+    await this.findOne(id);
 
-    console.log('✅ Existing case found:', existingCase.title);
-
-    // Подготавливаем данные для обновления
+    // Build update object
     const updateData: any = {};
 
     if (dto.title !== undefined) {
-      console.log('Updating title:', dto.title);
-      updateData.title = dto.title;
+      updateData.title = dto.title.trim();
     }
+
     if (dto.description !== undefined) {
-      console.log('Updating description');
-      updateData.description = dto.description;
+      updateData.description = dto.description.trim();
     }
+
     if (dto.severity !== undefined) {
-      // Нормализуем severity
-      const normalizedSeverity = dto.severity.toString().toUpperCase();
-      console.log('Normalizing severity:', dto.severity, '->', normalizedSeverity);
-      
-      if (['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(normalizedSeverity)) {
-        updateData.severity = normalizedSeverity as Severity;
-      } else {
-        console.warn('⚠️ Invalid severity value:', normalizedSeverity);
-      }
+      updateData.severity = this.normalizeEnum(
+        dto.severity,
+        ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const,
+        'severity',
+      );
     }
+
     if (dto.status !== undefined) {
-      // Нормализуем status
-      const normalizedStatus = dto.status.toString().toUpperCase();
-      console.log('Normalizing status:', dto.status, '->', normalizedStatus);
-      
-      if (['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED'].includes(normalizedStatus)) {
-        updateData.status = normalizedStatus as CaseStatus;
-      } else {
-        console.warn('⚠️ Invalid status value:', normalizedStatus);
-      }
+      updateData.status = this.normalizeEnum(
+        dto.status,
+        ['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED'] as const,
+        'status',
+      );
     }
+
     if (dto.tags !== undefined) {
-      console.log('Updating tags:', dto.tags);
-      updateData.tags = dto.tags;
+      updateData.tags = dto.tags.map((tag) => tag.trim());
     }
+
     if (dto.assignedToId !== undefined) {
-      console.log('Updating assignedToId:', dto.assignedToId);
       updateData.assignedToId = dto.assignedToId;
     }
 
-    console.log('📦 Final update data:', JSON.stringify(updateData, null, 2));
-
+    // If no fields to update
     if (Object.keys(updateData).length === 0) {
-      console.log('⚠️ No fields to update');
-      return existingCase;
+      this.logger.warn(`No fields to update for case: ${id}`);
+      return this.findOne(id);
     }
 
-    try {
-      const updatedCase = await this.prisma.case.update({
-        where: { id },
-        data: updateData,
-        include: {
-          createdBy: {
-            select: { id: true, name: true, email: true, role: true },
-          },
-          assignedTo: {
-            select: { id: true, name: true, email: true, role: true },
-          },
+    this.logger.debug(`Final update data: ${JSON.stringify(updateData)}`);
+
+    const updatedCase = await this.prisma.case.update({
+      where: { id },
+      data: updateData,
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true, role: true },
         },
-      });
-      
-      console.log('✅ Case updated successfully');
-      return updatedCase;
-    } catch (error) {
-      console.error('❌ Database error during update:', error);
-      throw error;
-    }
+        assignedTo: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    });
+
+    this.logger.log(`Case updated successfully: ${id}`);
+    return updatedCase;
   }
 
   async delete(id: string) {
+    this.logger.log(`Deleting case: ${id}`);
+
+    // Check if case exists
     await this.findOne(id);
-    return this.prisma.case.delete({ where: { id } });
+
+    // Use transaction to delete case and all related data
+    return this.prisma.$transaction(async (tx) => {
+      // Delete related timeline events
+      await tx.timelineEvent.deleteMany({ where: { caseId: id } });
+
+      // Delete chain of custody entries for related evidence
+      const evidence = await tx.evidence.findMany({
+        where: { caseId: id },
+        select: { id: true },
+      });
+
+      for (const ev of evidence) {
+        await tx.chainOfCustodyEntry.deleteMany({
+          where: { evidenceId: ev.id },
+        });
+      }
+
+      // Delete evidence
+      await tx.evidence.deleteMany({ where: { caseId: id } });
+
+      // Delete case
+      return tx.case.delete({ where: { id } });
+    });
   }
 
+  /**
+   * Update case statistics based on related data
+   */
   async updateStats(caseId: string) {
-    const evidenceCount = await this.prisma.evidence.count({
-      where: { caseId },
-    });
+    this.logger.debug(`Updating stats for case: ${caseId}`);
 
-    const eventsCount = await this.prisma.timelineEvent.count({
-      where: { caseId },
-    });
-
-    const suspiciousActivities = await this.prisma.timelineEvent.count({
-      where: {
-        caseId,
-        severity: { in: [Severity.HIGH, Severity.CRITICAL] },
-      },
-    });
+    const [evidenceCount, eventsCount, suspiciousActivities] = await Promise.all([
+      this.prisma.evidence.count({ where: { caseId } }),
+      this.prisma.timelineEvent.count({ where: { caseId } }),
+      this.prisma.timelineEvent.count({
+        where: {
+          caseId,
+          severity: { in: [Severity.HIGH, Severity.CRITICAL] },
+        },
+      }),
+    ]);
 
     return this.prisma.case.update({
       where: { id: caseId },
