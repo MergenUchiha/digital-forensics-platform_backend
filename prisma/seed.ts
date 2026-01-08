@@ -1,23 +1,45 @@
+// prisma/seed.ts
 import { PrismaClient, Role, CaseStatus, Severity, EvidenceType, EventType, CustodyAction } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+// Предсказуемые UUID для демо-данных
+const DEMO_IDS = {
+  users: {
+    analyst: '00000000-0000-0000-0000-000000000001',
+    admin: '00000000-0000-0000-0000-000000000002',
+  },
+  cases: {
+    case1: '00000000-0000-0000-0000-000000000011',
+    case2: '00000000-0000-0000-0000-000000000012',
+    case3: '00000000-0000-0000-0000-000000000013',
+    case4: '00000000-0000-0000-0000-000000000014',
+  },
+  evidence: {
+    evidence1: '00000000-0000-0000-0000-000000000021',
+    evidence2: '00000000-0000-0000-0000-000000000022',
+  },
+};
+
 async function main() {
   console.log('🌱 Starting database seed...');
 
   // Очистка существующих данных
+  console.log('🗑️  Cleaning existing data...');
   await prisma.timelineEvent.deleteMany();
   await prisma.chainOfCustodyEntry.deleteMany();
   await prisma.evidence.deleteMany();
   await prisma.case.deleteMany();
   await prisma.user.deleteMany();
 
-  // Создание пользователей
+  // Создание пользователей с предсказуемыми ID
+  console.log('👤 Creating users...');
   const hashedPassword = await bcrypt.hash('demo123', 10);
 
   const analyst = await prisma.user.create({
     data: {
+      id: DEMO_IDS.users.analyst,
       email: 'analyst@forensics.io',
       password: hashedPassword,
       name: 'Alex Johnson',
@@ -27,6 +49,7 @@ async function main() {
 
   const admin = await prisma.user.create({
     data: {
+      id: DEMO_IDS.users.admin,
       email: 'admin@forensics.io',
       password: hashedPassword,
       name: 'Sarah Admin',
@@ -34,11 +57,16 @@ async function main() {
     },
   });
 
-  console.log('✅ Created users');
+  console.log('✅ Created users:');
+  console.log(`   - Analyst: ${analyst.email} (ID: ${analyst.id})`);
+  console.log(`   - Admin: ${admin.email} (ID: ${admin.id})`);
 
-  // Создание дел
+  // Создание дел с предсказуемыми ID
+  console.log('\n📁 Creating cases...');
+  
   const case1 = await prisma.case.create({
     data: {
+      id: DEMO_IDS.cases.case1,
       title: 'AWS S3 Bucket Data Breach',
       description: 'Unauthorized access detected to production S3 bucket containing customer PII. Multiple GET requests from unknown IP addresses.',
       status: CaseStatus.IN_PROGRESS,
@@ -58,6 +86,7 @@ async function main() {
 
   const case2 = await prisma.case.create({
     data: {
+      id: DEMO_IDS.cases.case2,
       title: 'IoT Camera Botnet Activity',
       description: 'Smart security cameras exhibiting unusual network behavior. Suspected Mirai variant infection across 50+ devices.',
       status: CaseStatus.OPEN,
@@ -76,6 +105,7 @@ async function main() {
 
   const case3 = await prisma.case.create({
     data: {
+      id: DEMO_IDS.cases.case3,
       title: 'Azure Container Registry Compromise',
       description: 'Malicious Docker image pushed to private ACR. Image contains cryptocurrency miner and reverse shell.',
       status: CaseStatus.IN_PROGRESS,
@@ -93,11 +123,38 @@ async function main() {
     },
   });
 
-  console.log('✅ Created cases');
+  const case4 = await prisma.case.create({
+    data: {
+      id: DEMO_IDS.cases.case4,
+      title: 'GCP API Key Exposure',
+      description: 'GCP service account key found in public GitHub repository. Multiple API calls from various locations detected.',
+      status: CaseStatus.CLOSED,
+      severity: Severity.HIGH,
+      tags: ['gcp', 'credential-leak', 'github', 'api'],
+      locationCity: 'Tokyo',
+      locationCountry: 'Japan',
+      locationLat: 35.6762,
+      locationLng: 139.6503,
+      evidenceCount: 0,
+      eventsCount: 0,
+      suspiciousActivities: 0,
+      createdById: analyst.id,
+      assignedToId: analyst.id,
+    },
+  });
+
+  console.log('✅ Created cases:');
+  console.log(`   - Case 1: ${case1.title} (ID: ${case1.id})`);
+  console.log(`   - Case 2: ${case2.title} (ID: ${case2.id})`);
+  console.log(`   - Case 3: ${case3.title} (ID: ${case3.id})`);
+  console.log(`   - Case 4: ${case4.title} (ID: ${case4.id})`);
 
   // Создание доказательств
+  console.log('\n📄 Creating evidence...');
+  
   const evidence1 = await prisma.evidence.create({
     data: {
+      id: DEMO_IDS.evidence.evidence1,
       name: 'cloudtrail_logs_20241220.json',
       type: EvidenceType.LOG,
       description: 'AWS CloudTrail logs showing unauthorized S3 access attempts',
@@ -117,6 +174,7 @@ async function main() {
 
   const evidence2 = await prisma.evidence.create({
     data: {
+      id: DEMO_IDS.evidence.evidence2,
       name: 's3_access_logs.csv',
       type: EvidenceType.LOG,
       description: 'S3 bucket access logs for the affected bucket',
@@ -133,9 +191,13 @@ async function main() {
     },
   });
 
-  console.log('✅ Created evidence');
+  console.log('✅ Created evidence:');
+  console.log(`   - Evidence 1: ${evidence1.name} (ID: ${evidence1.id})`);
+  console.log(`   - Evidence 2: ${evidence2.name} (ID: ${evidence2.id})`);
 
   // Создание цепочки хранения
+  console.log('\n🔗 Creating chain of custody...');
+  
   await prisma.chainOfCustodyEntry.create({
     data: {
       action: CustodyAction.COLLECTED,
@@ -157,6 +219,8 @@ async function main() {
   console.log('✅ Created chain of custody entries');
 
   // Создание событий временной шкалы
+  console.log('\n⏱️  Creating timeline events...');
+  
   await prisma.timelineEvent.createMany({
     data: [
       {
@@ -233,9 +297,11 @@ async function main() {
     ],
   });
 
-  console.log('✅ Created timeline events');
+  console.log('✅ Created 4 timeline events');
 
   // Обновление статистики дел
+  console.log('\n📊 Updating case statistics...');
+  
   await prisma.case.update({
     where: { id: case1.id },
     data: {
@@ -247,15 +313,22 @@ async function main() {
 
   console.log('✅ Updated case statistics');
 
-  console.log('');
+  console.log('\n' + '='.repeat(60));
   console.log('🎉 Seed completed successfully!');
-  console.log('');
-  console.log('📝 Test credentials:');
+  console.log('='.repeat(60));
+  console.log('\n📝 Test credentials:');
   console.log('   Email: analyst@forensics.io');
   console.log('   Password: demo123');
-  console.log('');
-  console.log('   Email: admin@forensics.io');
+  console.log('\n   Email: admin@forensics.io');
   console.log('   Password: demo123');
+  console.log('\n📁 Demo Case IDs (use these in your tests):');
+  console.log(`   - Case 1 (AWS S3): ${DEMO_IDS.cases.case1}`);
+  console.log(`   - Case 2 (IoT): ${DEMO_IDS.cases.case2}`);
+  console.log(`   - Case 3 (Azure): ${DEMO_IDS.cases.case3}`);
+  console.log(`   - Case 4 (GCP): ${DEMO_IDS.cases.case4}`);
+  console.log('\n💡 Quick test URL:');
+  console.log(`   http://localhost:3000/cases/${DEMO_IDS.cases.case1}`);
+  console.log('='.repeat(60) + '\n');
 }
 
 main()
