@@ -9,22 +9,25 @@ import * as morgan from 'morgan';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  
+
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
   const configService = app.get(ConfigService);
   const port = configService.get('PORT', 4000);
-  const frontendUrl = configService.get('FRONTEND_URL', 'http://localhost:3000');
+  const frontendUrl = configService.get(
+    'FRONTEND_URL',
+    'http://localhost:3002',
+  );
   const nodeEnv = configService.get('NODE_ENV', 'development');
 
   // Enable CORS
   app.enableCors({
-    origin: frontendUrl,
+    origin: ['http://localhost:3000', 'http://localhost:3002'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
   });
 
   // API prefix
