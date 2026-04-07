@@ -15,7 +15,7 @@ async function bootstrap() {
   });
 
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT', 4000);
+  const port = configService.get('PORT', 5001);
   const frontendUrl = configService.get(
     'FRONTEND_URL',
     'http://localhost:3002',

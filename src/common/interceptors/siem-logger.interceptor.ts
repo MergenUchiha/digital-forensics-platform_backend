@@ -21,7 +21,7 @@ export class SiemLoggerInterceptor implements NestInterceptor {
     private configService: ConfigService,
     private logsService: LogsService,
   ) {
-    this.siemUrl = configService.get('SIEM_URL', 'http://localhost:3001');
+    this.siemUrl = configService.get('SIEM_URL', 'http://localhost:5001');
     this.siemApiKey = configService.get('SIEM_API_KEY', '');
     this.enabled = !!this.siemApiKey;
   }
