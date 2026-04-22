@@ -1,7 +1,9 @@
 import {
   Controller,
   Get,
+  Post,
   Head,
+  Body,
   Headers,
   UnauthorizedException,
   HttpCode,
@@ -21,6 +23,21 @@ export class LogsController {
   @HttpCode(200)
   testIngest(@Headers('x-api-key') apiKey: string) {
     this.validateKey(apiKey);
+  }
+
+  @Post('ingest')
+  ingestLog(@Body() logData: any, @Headers('x-api-key') apiKey: string) {
+    this.validateKey(apiKey);
+
+    return this.logsService.save({
+      source: logData.source || logData.host || logData.hostname || 'External',
+      severity: logData.level || logData.severity || logData.priority || 'info',
+      message: logData.message || logData.msg || logData.log || 'No message',
+      ip: logData.ip || logData.src_ip || logData.source_ip || logData.host || '0.0.0.0',
+      action: logData.action || logData.event_type || logData.event || 'Unknown',
+      user: logData.user || logData.username || logData.account,
+      details: logData,
+    });
   }
 
   @Get()

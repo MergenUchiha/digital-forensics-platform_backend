@@ -4,13 +4,17 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CasesService } from './cases.service';
 import { CreateCaseSchema, UpdateCaseSchema, CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { I18nService } from 'nestjs-i18n';
 
 @ApiTags('Cases')
 @Controller('cases')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CasesController {
-  constructor(private casesService: CasesService) {}
+  constructor(
+    private casesService: CasesService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create new case' })
@@ -51,7 +55,7 @@ export class CasesController {
       
       if (error.name === 'ZodError') {
         throw new BadRequestException({
-          message: 'Validation failed',
+          message: this.i18n.t('common.errors.validation_failed'),
           errors: error.errors.map((e: any) => ({
             field: e.path.join('.'),
             message: e.message,

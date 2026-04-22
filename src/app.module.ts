@@ -12,10 +12,23 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { SiemLoggerInterceptor } from './common/interceptors/siem-logger.interceptor';
 import { LogsModule } from './logs/logs.module';
 import { LogsService } from './logs/logs.service';
+import { I18nModule, AcceptLanguageResolver, HeaderResolver } from 'nestjs-i18n';
+import * as path from 'path';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: path.join(__dirname, '/../i18n/'),
+        watch: true,
+      },
+      resolvers: [
+        new HeaderResolver(['x-lang']),
+        AcceptLanguageResolver,
+      ],
+    }),
     PrismaModule,
     AuthModule,
     CasesModule,

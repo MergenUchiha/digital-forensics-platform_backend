@@ -16,6 +16,8 @@ export class SiemLoggerInterceptor implements NestInterceptor {
   private readonly siemUrl: string;
   private readonly siemApiKey: string;
   private readonly enabled: boolean;
+  private queue: any[] = [];
+  private isSending = false;
 
   constructor(
     private configService: ConfigService,
@@ -24,6 +26,9 @@ export class SiemLoggerInterceptor implements NestInterceptor {
     this.siemUrl = configService.get('SIEM_URL', 'http://localhost:5001');
     this.siemApiKey = configService.get('SIEM_API_KEY', '');
     this.enabled = !!this.siemApiKey;
+
+    // Отправляем логи из очереди раз в 1 секунду
+    setInterval(() => this.flushOne(), 1000);
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
@@ -72,18 +77,31 @@ export class SiemLoggerInterceptor implements NestInterceptor {
     // Сохраняем локально для Pull
     this.logsService.save(payload);
 
-    // Push в SIEM (fire-and-forget)
-    fetch(`${this.siemUrl}/api/logs/ingest`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.siemApiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(3000),
-    }).catch((err) => {
+    // Добавляем в очередь (отправится раз в 1 секунду)
+    this.queue.push(payload);
+  }
+
+  private async flushOne() {
+    if (this.isSending || this.queue.length === 0) return;
+
+    this.isSending = true;
+    const payload = this.queue.shift();
+
+    try {
+      await fetch(`${this.siemUrl}/api/logs/ingest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.siemApiKey,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch (err: any) {
       this.logger.warn(`Failed to send log to SIEM: ${err.message}`);
-    });
+    } finally {
+      this.isSending = false;
+    }
   }
 
   private mapSeverity(

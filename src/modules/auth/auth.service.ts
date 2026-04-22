@@ -3,12 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterInput, LoginInput } from './dto/auth.dto';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private readonly i18n: I18nService,
   ) {}
 
   async register(input: RegisterInput) {
@@ -36,13 +38,13 @@ export class AuthService {
     const user = await this.usersService.findByEmail(input.email);
     
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(this.i18n.t('common.errors.invalid_credentials'));
     }
 
     const isPasswordValid = await bcrypt.compare(input.password, user.password);
-    
+
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(this.i18n.t('common.errors.invalid_credentials'));
     }
 
     const token = this.generateToken(user.id, user.email);

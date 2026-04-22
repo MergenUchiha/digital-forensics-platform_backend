@@ -1,0 +1,31 @@
+{
+  "errors": {
+    "internal_server_error": "Serweriň içki ýalňyşlygy",
+    "validation_failed": "Barlag şowsuz boldy",
+    "unique_constraint": "Üýtgeşiklik bozulmasy",
+    "already_exists": "Eýýäm bar",
+    "record_not_found": "Ýazgy tapylmady",
+    "foreign_key_constraint": "Daşarky açar çäklendirmesi şowsuz boldy",
+    "database_error": "Maglumat bazasynyň ýalňyşlygy",
+    "invalid_credentials": "Nädogry ynanç hatlary",
+    "user_already_exists": "Ulanyjy eýýäm bar",
+    "user_not_found": "Ulanyjy tapylmady",
+    "current_password_incorrect": "Häzirki açar söz nädogry",
+    "case_not_found": "ID {id} bolan iş tapylmady",
+    "evidence_not_found": "Subutnama tapylmady",
+    "invalid_enum": "Nädogry {enumName}: {value}. Dogry bahalar: {validValues}"
+  },
+  "success": {
+    "password_updated": "Açar söz üstünlikli täzelendi"
+  },
+  "notifications": {
+    "case_created_title": "Täze iş döredildi",
+    "case_created_message": "\"{title}\" atly iş döredildi",
+    "evidence_uploaded_title": "Subutnama ýüklendi",
+    "evidence_uploaded_message": "Täze subutnama \"{name}\" ýüklendi",
+    "critical_alert_title": "Möhüm duýduryş"
+  },
+  "evidence": {
+    "collected_notes": "Subutnama ýygnaldy we ýüklendi"
+  }
+}

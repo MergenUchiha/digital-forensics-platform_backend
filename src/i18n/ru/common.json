@@ -1,0 +1,31 @@
+{
+  "errors": {
+    "internal_server_error": "Внутренняя ошибка сервера",
+    "validation_failed": "Ошибка валидации",
+    "unique_constraint": "Нарушение уникальности",
+    "already_exists": "Уже существует",
+    "record_not_found": "Запись не найдена",
+    "foreign_key_constraint": "Ошибка внешнего ключа",
+    "database_error": "Ошибка базы данных",
+    "invalid_credentials": "Неверные учётные данные",
+    "user_already_exists": "Пользователь уже существует",
+    "user_not_found": "Пользователь не найден",
+    "current_password_incorrect": "Текущий пароль неверный",
+    "case_not_found": "Дело с ID {id} не найдено",
+    "evidence_not_found": "Улика не найдена",
+    "invalid_enum": "Недопустимое значение {enumName}: {value}. Допустимые значения: {validValues}"
+  },
+  "success": {
+    "password_updated": "Пароль успешно обновлён"
+  },
+  "notifications": {
+    "case_created_title": "Новое дело создано",
+    "case_created_message": "Дело \"{title}\" было создано",
+    "evidence_uploaded_title": "Улика загружена",
+    "evidence_uploaded_message": "Новая улика \"{name}\" была загружена",
+    "critical_alert_title": "Критическое оповещение"
+  },
+  "evidence": {
+    "collected_notes": "Улика собрана и загружена"
+  }
+}

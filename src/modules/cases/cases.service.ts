@@ -2,13 +2,43 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
-import { CaseStatus, Severity } from '@prisma/client';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class CasesService {
   private readonly logger = new Logger(CasesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly i18n: I18nService,
+  ) {}
+
+  private parseJsonFields(data: any) {
+    if (!data) return data;
+    if (Array.isArray(data)) return data.map((item) => this.parseJsonFields(item));
+    if (typeof data.tags === 'string') {
+      try { data.tags = JSON.parse(data.tags); } catch { data.tags = []; }
+    }
+    if (data.timelineEvents) {
+      data.timelineEvents = data.timelineEvents.map((e: any) => {
+        for (const field of ['ipAddresses', 'usernames', 'files', 'devices', 'metadata']) {
+          if (typeof e[field] === 'string') {
+            try { e[field] = JSON.parse(e[field]); } catch { e[field] = field === 'metadata' ? null : []; }
+          }
+        }
+        return e;
+      });
+    }
+    if (data.evidence) {
+      data.evidence = data.evidence.map((e: any) => {
+        if (typeof e.metadata === 'string') {
+          try { e.metadata = JSON.parse(e.metadata); } catch { e.metadata = null; }
+        }
+        return e;
+      });
+    }
+    return data;
+  }
 
   /**
    * Normalize enum value to match Prisma schema
@@ -24,7 +54,7 @@ export class CasesService {
 
     if (!validValues.includes(normalized)) {
       throw new BadRequestException(
-        `Invalid ${enumName}: ${value}. Valid values are: ${validValues.join(', ')}`,
+        this.i18n.t('common.errors.invalid_enum', { args: { enumName, value, validValues: validValues.join(', ') } }),
       );
     }
 
@@ -46,13 +76,13 @@ export class CasesService {
       'status',
     );
 
-    return this.prisma.case.create({
+    const result = await this.prisma.case.create({
       data: {
         title: dto.title.trim(),
         description: dto.description.trim(),
         severity: severity!,
         status: status!,
-        tags: dto.tags?.map((tag) => tag.trim()) || [],
+        tags: JSON.stringify(dto.tags?.map((tag) => tag.trim()) || []),
         locationCity: dto.location?.city?.trim(),
         locationCountry: dto.location?.country?.trim(),
         locationLat: dto.location?.lat,
@@ -69,6 +99,7 @@ export class CasesService {
         },
       },
     });
+    return this.parseJsonFields(result);
   }
 
   async findAll(status?: string) {
@@ -82,7 +113,7 @@ export class CasesService {
         )
       : undefined;
 
-    return this.prisma.case.findMany({
+    const results = await this.prisma.case.findMany({
       where: normalizedStatus ? { status: normalizedStatus } : undefined,
       include: {
         createdBy: {
@@ -94,6 +125,7 @@ export class CasesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return this.parseJsonFields(results);
   }
 
   async findOne(id: string) {
@@ -130,10 +162,10 @@ export class CasesService {
     });
 
     if (!caseData) {
-      throw new NotFoundException(`Case with ID ${id} not found`);
+      throw new NotFoundException(this.i18n.t('common.errors.case_not_found', { args: { id } }));
     }
 
-    return caseData;
+    return this.parseJsonFields(caseData);
   }
 
   async update(id: string, dto: UpdateCaseInput) {
@@ -171,7 +203,7 @@ export class CasesService {
     }
 
     if (dto.tags !== undefined) {
-      updateData.tags = dto.tags.map((tag) => tag.trim());
+      updateData.tags = JSON.stringify(dto.tags.map((tag) => tag.trim()));
     }
 
     if (dto.assignedToId !== undefined) {
@@ -200,7 +232,7 @@ export class CasesService {
     });
 
     this.logger.log(`Case updated successfully: ${id}`);
-    return updatedCase;
+    return this.parseJsonFields(updatedCase);
   }
 
   async delete(id: string) {
@@ -246,7 +278,7 @@ export class CasesService {
       this.prisma.timelineEvent.count({
         where: {
           caseId,
-          severity: { in: [Severity.HIGH, Severity.CRITICAL] },
+          severity: { in: ['HIGH', 'CRITICAL'] },
         },
       }),
     ]);

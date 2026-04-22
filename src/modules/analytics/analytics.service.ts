@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Severity, CaseStatus } from '@prisma/client';
 
 @Injectable()
 export class AnalyticsService {
@@ -18,12 +17,12 @@ export class AnalyticsService {
       this.prisma.case.count({
         where: {
           status: {
-            in: [CaseStatus.OPEN, CaseStatus.IN_PROGRESS],
+            in: ['OPEN', 'IN_PROGRESS'],
           },
         },
       }),
       this.prisma.case.count({
-        where: { severity: Severity.CRITICAL },
+        where: { severity: 'CRITICAL' },
       }),
       this.prisma.evidence.count(),
       this.prisma.timelineEvent.count(),

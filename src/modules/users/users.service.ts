@@ -5,31 +5,34 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly i18n: I18nService,
+  ) {}
 
   async create(data: {
     email: string;
     password: string;
     name: string;
-    role?: Role;
+    role?: string;
   }) {
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existing) {
-      throw new ConflictException('User already exists');
+      throw new ConflictException(this.i18n.t('common.errors.user_already_exists'));
     }
 
     return this.prisma.user.create({
       data: {
         ...data,
-        role: data.role || Role.ANALYST,
+        role: data.role || 'ANALYST',
       },
       select: {
         id: true,
@@ -55,7 +58,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(this.i18n.t('common.errors.user_not_found'));
     }
 
     return user;
@@ -113,7 +116,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(this.i18n.t('common.errors.user_not_found'));
     }
 
     // Проверяем текущий пароль
@@ -123,7 +126,7 @@ export class UsersService {
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new UnauthorizedException(this.i18n.t('common.errors.current_password_incorrect'));
     }
 
     // Хешируем новый пароль
@@ -137,6 +140,6 @@ export class UsersService {
       },
     });
 
-    return { message: 'Password updated successfully' };
+    return { message: this.i18n.t('common.success.password_updated') };
   }
 }

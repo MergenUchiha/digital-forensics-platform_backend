@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { EventType, Severity } from '@prisma/client';
 import { CasesService } from '../cases/cases.service';
 import { CreateTimelineEventInput } from './dto/timeline.dto';
 
@@ -11,20 +10,31 @@ export class TimelineService {
     private casesService: CasesService,
   ) {}
 
+  private parseJsonFields(data: any) {
+    if (!data) return data;
+    if (Array.isArray(data)) return data.map((item) => this.parseJsonFields(item));
+    for (const field of ['ipAddresses', 'usernames', 'files', 'devices', 'metadata']) {
+      if (typeof data[field] === 'string') {
+        try { data[field] = JSON.parse(data[field]); } catch { data[field] = field === 'metadata' ? null : []; }
+      }
+    }
+    return data;
+  }
+
   async create(input: CreateTimelineEventInput) {
     const event = await this.prisma.timelineEvent.create({
       data: {
         timestamp: new Date(input.timestamp),
-        type: input.type as EventType,
+        type: input.type,
         source: input.source,
-        severity: input.severity as Severity,
+        severity: input.severity,
         title: input.title,
         description: input.description,
-        metadata: input.metadata || {},
-        ipAddresses: input.ipAddresses || [],
-        usernames: input.usernames || [],
-        files: input.files || [],
-        devices: input.devices || [],
+        metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+        ipAddresses: JSON.stringify(input.ipAddresses || []),
+        usernames: JSON.stringify(input.usernames || []),
+        files: JSON.stringify(input.files || []),
+        devices: JSON.stringify(input.devices || []),
         caseId: input.caseId,
       },
     });
@@ -32,18 +42,17 @@ export class TimelineService {
     // Update case stats
     await this.casesService.updateStats(input.caseId);
 
-    return event;
+    return this.parseJsonFields(event);
   }
 
   async findAll(caseId?: string, severity?: string) {
     // Нормализуем severity к верхнему регистру если передан
     const normalizedSeverity = severity ? severity.toUpperCase() : undefined;
-    
+
     // Проверяем валидность severity
     const validSeverities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
     if (normalizedSeverity && !validSeverities.includes(normalizedSeverity)) {
-      // Если severity невалиден, игнорируем его
-      return this.prisma.timelineEvent.findMany({
+      const results = await this.prisma.timelineEvent.findMany({
         where: {
           ...(caseId && { caseId }),
         },
@@ -54,12 +63,13 @@ export class TimelineService {
         },
         orderBy: { timestamp: 'desc' },
       });
+      return this.parseJsonFields(results);
     }
 
-    return this.prisma.timelineEvent.findMany({
+    const results = await this.prisma.timelineEvent.findMany({
       where: {
         ...(caseId && { caseId }),
-        ...(normalizedSeverity && { severity: normalizedSeverity as Severity }),
+        ...(normalizedSeverity && { severity: normalizedSeverity }),
       },
       include: {
         case: {
@@ -68,6 +78,7 @@ export class TimelineService {
       },
       orderBy: { timestamp: 'desc' },
     });
+    return this.parseJsonFields(results);
   }
 
   async findOne(id: string) {
@@ -84,7 +95,7 @@ export class TimelineService {
       throw new NotFoundException('Timeline event not found');
     }
 
-    return event;
+    return this.parseJsonFields(event);
   }
 
   async delete(id: string) {

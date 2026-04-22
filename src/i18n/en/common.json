@@ -1,0 +1,31 @@
+{
+  "errors": {
+    "internal_server_error": "Internal server error",
+    "validation_failed": "Validation failed",
+    "unique_constraint": "Unique constraint violation",
+    "already_exists": "Already exists",
+    "record_not_found": "Record not found",
+    "foreign_key_constraint": "Foreign key constraint failed",
+    "database_error": "Database error",
+    "invalid_credentials": "Invalid credentials",
+    "user_already_exists": "User already exists",
+    "user_not_found": "User not found",
+    "current_password_incorrect": "Current password is incorrect",
+    "case_not_found": "Case with ID {id} not found",
+    "evidence_not_found": "Evidence not found",
+    "invalid_enum": "Invalid {enumName}: {value}. Valid values are: {validValues}"
+  },
+  "success": {
+    "password_updated": "Password updated successfully"
+  },
+  "notifications": {
+    "case_created_title": "New Case Created",
+    "case_created_message": "Case \"{title}\" has been created",
+    "evidence_uploaded_title": "Evidence Uploaded",
+    "evidence_uploaded_message": "New evidence \"{name}\" has been uploaded",
+    "critical_alert_title": "Critical Alert"
+  },
+  "evidence": {
+    "collected_notes": "Evidence collected and uploaded"
+  }
+}

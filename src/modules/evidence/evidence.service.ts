@@ -1,16 +1,26 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { EvidenceType, CustodyAction } from '@prisma/client';
 import { CasesService } from '../cases/cases.service';
 import { CreateEvidenceInput } from './dto/evidence.dto';
 import * as crypto from 'crypto';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class EvidenceService {
   constructor(
     private prisma: PrismaService,
     private casesService: CasesService,
+    private readonly i18n: I18nService,
   ) {}
+
+  private parseMetadata(data: any) {
+    if (!data) return data;
+    if (Array.isArray(data)) return data.map((item) => this.parseMetadata(item));
+    if (typeof data.metadata === 'string') {
+      try { data.metadata = JSON.parse(data.metadata); } catch { data.metadata = null; }
+    }
+    return data;
+  }
 
   async create(input: CreateEvidenceInput, userId: string, file?: Express.Multer.File) {
     // Generate hashes
@@ -26,19 +36,19 @@ export class EvidenceService {
     const evidence = await this.prisma.evidence.create({
       data: {
         name: input.name,
-        type: input.type as EvidenceType,
+        type: input.type,
         description: input.description,
         filePath: file?.path,
         fileSize: file?.size,
         md5Hash,
         sha256Hash,
-        metadata: input.metadata || {},
+        metadata: input.metadata ? JSON.stringify(input.metadata) : null,
         caseId: input.caseId,
         uploadedById: userId,
         chainOfCustody: {
           create: {
-            action: CustodyAction.COLLECTED,
-            notes: 'Evidence collected and uploaded',
+            action: 'COLLECTED',
+            notes: this.i18n.t('common.evidence.collected_notes'),
             performedById: userId,
           },
         },
@@ -60,11 +70,11 @@ export class EvidenceService {
     // Update case stats
     await this.casesService.updateStats(input.caseId);
 
-    return evidence;
+    return this.parseMetadata(evidence);
   }
 
   async findAll(caseId?: string) {
-    return this.prisma.evidence.findMany({
+    const results = await this.prisma.evidence.findMany({
       where: caseId ? { caseId } : undefined,
       include: {
         uploadedBy: { 
@@ -76,6 +86,7 @@ export class EvidenceService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return this.parseMetadata(results);
   }
 
   async findOne(id: string) {
@@ -100,10 +111,10 @@ export class EvidenceService {
     });
 
     if (!evidence) {
-      throw new NotFoundException('Evidence not found');
+      throw new NotFoundException(this.i18n.t('common.errors.evidence_not_found'));
     }
 
-    return evidence;
+    return this.parseMetadata(evidence);
   }
 
   async delete(id: string) {

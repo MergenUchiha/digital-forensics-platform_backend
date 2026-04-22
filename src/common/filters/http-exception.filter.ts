@@ -9,6 +9,7 @@ import {
 import { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import { I18nContext } from 'nestjs-i18n';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -18,16 +19,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+    const i18n = I18nContext.current(host);
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message = i18n?.t('common.errors.internal_server_error') || 'Internal server error';
     let errors: any[] = [];
 
     // Handle different exception types
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      
+
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
         message = (exceptionResponse as any).message || message;
         errors = (exceptionResponse as any).errors || [];
@@ -36,7 +38,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     } else if (exception instanceof ZodError) {
       status = HttpStatus.BAD_REQUEST;
-      message = 'Validation failed';
+      message = i18n?.t('common.errors.validation_failed') || 'Validation failed';
       errors = exception.errors.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
@@ -45,21 +47,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       // Handle Prisma errors
       status = HttpStatus.BAD_REQUEST;
-      
+
       switch (exception.code) {
         case 'P2002':
-          message = 'Unique constraint violation';
-          errors = [{ field: (exception.meta?.target as string[])?.[0], message: 'Already exists' }];
+          message = i18n?.t('common.errors.unique_constraint') || 'Unique constraint violation';
+          errors = [{ field: (exception.meta?.target as string[])?.[0], message: i18n?.t('common.errors.already_exists') || 'Already exists' }];
           break;
         case 'P2025':
           status = HttpStatus.NOT_FOUND;
-          message = 'Record not found';
+          message = i18n?.t('common.errors.record_not_found') || 'Record not found';
           break;
         case 'P2003':
-          message = 'Foreign key constraint failed';
+          message = i18n?.t('common.errors.foreign_key_constraint') || 'Foreign key constraint failed';
           break;
         default:
-          message = 'Database error';
+          message = i18n?.t('common.errors.database_error') || 'Database error';
       }
     } else if (exception instanceof Error) {
       message = exception.message;
