@@ -78,6 +78,9 @@ model Evidence {
   md5Hash    String
   sha256Hash String
 
+  // IoT device source (e.g., CAMERA, SMART_SPEAKER, SENSOR, SMART_LOCK, ROUTER, DVR, OTHER)
+  iotDeviceType String?
+
   // Metadata
   metadata String?
 

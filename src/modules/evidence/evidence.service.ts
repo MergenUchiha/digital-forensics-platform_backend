@@ -24,13 +24,19 @@ export class EvidenceService {
 
   async create(input: CreateEvidenceInput, userId: string, file?: Express.Multer.File) {
     // Generate hashes
-    const md5Hash = file 
-      ? crypto.createHash('md5').update(file.buffer).digest('hex')
-      : crypto.randomBytes(16).toString('hex');
-    
-    const sha256Hash = file 
-      ? crypto.createHash('sha256').update(file.buffer).digest('hex')
-      : crypto.randomBytes(32).toString('hex');
+    let md5Hash: string;
+    let sha256Hash: string;
+
+    if (file) {
+      // Read the file from disk to compute hashes
+      const fs = await import('fs');
+      const fileBuffer = fs.readFileSync(file.path);
+      md5Hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+      sha256Hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    } else {
+      md5Hash = crypto.randomBytes(16).toString('hex');
+      sha256Hash = crypto.randomBytes(32).toString('hex');
+    }
 
     // Create evidence
     const evidence = await this.prisma.evidence.create({
@@ -38,10 +44,11 @@ export class EvidenceService {
         name: input.name,
         type: input.type,
         description: input.description,
-        filePath: file?.path,
-        fileSize: file?.size,
+        filePath: file?.path || null,
+        fileSize: file?.size || null,
         md5Hash,
         sha256Hash,
+        iotDeviceType: input.iotDeviceType || null,
         metadata: input.metadata ? JSON.stringify(input.metadata) : null,
         caseId: input.caseId,
         uploadedById: userId,

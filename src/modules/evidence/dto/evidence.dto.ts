@@ -10,9 +10,21 @@ export const CreateEvidenceSchema = z.object({
     'MEMORY_DUMP',
     'FILE',
     'API_RESPONSE',
+    'PHOTO',
   ]),
   description: z.string().optional(),
   caseId: z.string().uuid('Invalid case ID'),
+  iotDeviceType: z.enum([
+    'CAMERA',
+    'SMART_SPEAKER',
+    'SENSOR',
+    'SMART_LOCK',
+    'ROUTER',
+    'DVR',
+    'SMART_TV',
+    'WEARABLE',
+    'OTHER',
+  ]).optional(),
   metadata: z.record(z.any()).optional(),
 });
 
