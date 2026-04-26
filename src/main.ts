@@ -27,11 +27,17 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000',
       'http://localhost:3002',
-      'http://161.97.114.35:5000',
+      'http://157.173.103.216:5173/',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-lang', 'Accept-Language'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-api-key',
+      'x-lang',
+      'Accept-Language',
+    ],
   });
 
   // API prefix
