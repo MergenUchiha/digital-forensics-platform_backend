@@ -1,7 +1,18 @@
 node_modules
 dist
+
 # Keep environment variables out of version control
 .env
 
-/generated/prisma
+# SQLite databases — never commit one. The repository carried prisma/dev.db
+# with real case data, evidence records and password hashes.
+prisma/*.db
+prisma/*.db-journal
+
+# Uploaded evidence files
 /uploads
+
+/generated/prisma
+
+# OS
+.DS_Store

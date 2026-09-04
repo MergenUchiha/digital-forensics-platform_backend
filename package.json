@@ -1,8 +1,8 @@
 {
   "name": "digital-forensics-backend",
   "version": "1.0.0",
-  "description": "Backend API for Digital Forensics Platform",
-  "author": "",
+  "description": "Digital forensics platform \u2014 cases, evidence, chain of custody and timeline",
+  "author": "MergenUchiha",
   "private": true,
   "license": "MIT",
   "scripts": {
@@ -12,11 +12,10 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
@@ -26,7 +25,8 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:format": "prisma format",
-    "db:setup": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed"
+    "db:setup": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed",
+    "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
@@ -40,6 +40,7 @@
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
+    "dotenv": "^16.4.7",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nestjs-i18n": "^10.7.2",
@@ -50,6 +51,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@nestjs/cli": "^10.3.0",
     "@nestjs/schematics": "^10.1.0",
     "@nestjs/testing": "^10.4.20",
@@ -61,11 +63,10 @@
     "@types/node": "^20.11.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.3",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0",
-    "eslint": "^8.56.0",
+    "eslint": "^9.39.1",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
+    "globals": "^16.5.0",
     "jest": "^29.7.0",
     "prettier": "^3.2.4",
     "prisma": "^5.22.0",
@@ -75,7 +76,8 @@
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.46.4"
   },
   "jest": {
     "moduleFileExtensions": [
