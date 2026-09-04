@@ -1,42 +1,68 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, UsePipes } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  CurrentUser,
+  type RequestUser,
+} from '../../common/decorators/current-user.decorator';
 import { TimelineService } from './timeline.service';
-import { CreateTimelineEventSchema, CreateTimelineEventInput } from './dto/timeline.dto';
+import {
+  CreateTimelineEventSchema,
+  TimelineFilterSchema,
+  type CreateTimelineEventInput,
+  type TimelineFilterInput,
+} from './dto/timeline.dto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
 @ApiTags('Timeline')
 @Controller('timeline')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class TimelineController {
   constructor(private timelineService: TimelineService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create timeline event' })
-  @UsePipes(new ZodValidationPipe(CreateTimelineEventSchema))
-  async create(@Body() dto: CreateTimelineEventInput) {
-    return this.timelineService.create(dto);
+  @ApiOperation({ summary: 'Add an event to a case timeline' })
+  async create(
+    @Body(new ZodValidationPipe(CreateTimelineEventSchema))
+    dto: CreateTimelineEventInput,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.timelineService.create(dto, user);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all timeline events' })
+  @ApiOperation({ summary: 'List timeline events the caller may see' })
   async findAll(
-    @Query('caseId') caseId?: string,
-    @Query('severity') severity?: string,
+    @CurrentUser() user: RequestUser,
+    @Query(new ZodValidationPipe(TimelineFilterSchema))
+    filter: TimelineFilterInput,
   ) {
-    return this.timelineService.findAll(caseId, severity);
+    return this.timelineService.findAll(user, filter);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get timeline event by ID' })
-  async findOne(@Param('id') id: string) {
-    return this.timelineService.findOne(id);
+  @ApiOperation({ summary: 'Get a timeline event by id' })
+  async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.timelineService.findOne(id, user);
   }
 
+  /** Removing an event from a forensic timeline is an administrator action. */
+  @Roles('ADMIN')
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete timeline event' })
-  async delete(@Param('id') id: string) {
-    return this.timelineService.delete(id);
+  @ApiOperation({ summary: 'Delete a timeline event (admin only)' })
+  async delete(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.timelineService.delete(id, user);
   }
 }

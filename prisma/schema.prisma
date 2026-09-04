@@ -13,6 +13,7 @@ model User {
   email     String   @unique
   password  String
   name      String
+  /// ADMIN | ANALYST — enforced by RolesGuard, see common/decorators/roles
   role      String   @default("ANALYST")
   avatar    String?
   createdAt DateTime @default(now())
@@ -55,7 +56,7 @@ model Case {
   createdBy   User   @relation("CaseCreator", fields: [createdById], references: [id])
 
   assignedToId String?
-  assignedTo   User?  @relation("CaseAssignee", fields: [assignedToId], references: [id])
+  assignedTo   User?   @relation("CaseAssignee", fields: [assignedToId], references: [id])
 
   evidence       Evidence[]
   timelineEvents TimelineEvent[]
@@ -71,12 +72,16 @@ model Evidence {
   description String?
 
   // File info
-  filePath String?
-  fileSize Int?
+  filePath         String?
+  fileSize         Int?
+  /// The name the file was uploaded under. The stored name is randomised.
+  originalFilename String?
 
-  // Hashes
-  md5Hash    String
-  sha256Hash String
+  /// Digests of the stored file. Null when the record has no file attached —
+  /// they used to be filled with random bytes in that case, which is
+  /// indistinguishable from a real hash and proves nothing.
+  md5Hash    String?
+  sha256Hash String?
 
   // IoT device source (e.g., CAMERA, SMART_SPEAKER, SENSOR, SMART_LOCK, ROUTER, DVR, OTHER)
   iotDeviceType String?

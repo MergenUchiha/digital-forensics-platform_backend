@@ -1,76 +1,94 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, UsePipes, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  CurrentUser,
+  type RequestUser,
+} from '../../common/decorators/current-user.decorator';
 import { CasesService } from './cases.service';
-import { CreateCaseSchema, UpdateCaseSchema, CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
+import {
+  CreateCaseSchema,
+  UpdateCaseSchema,
+  CreateCaseInput,
+  UpdateCaseInput,
+} from './dto/case.dto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { I18nService } from 'nestjs-i18n';
 
 @ApiTags('Cases')
 @Controller('cases')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class CasesController {
-  constructor(
-    private casesService: CasesService,
-    private readonly i18n: I18nService,
-  ) {}
+  constructor(private casesService: CasesService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create new case' })
-  @UsePipes(new ZodValidationPipe(CreateCaseSchema))
-  async create(@Body() dto: CreateCaseInput, @Req() req) {
-    console.log('📝 Creating case:', dto);
-    return this.casesService.create(dto, req.user.id);
+  @ApiOperation({ summary: 'Create a case' })
+  async create(
+    // The pipe goes on the parameter, not the method: `@UsePipes` applies to
+    // every parameter of the handler, so it also ran the body schema against
+    // the `@CurrentUser()` object and rejected every request.
+    @Body(new ZodValidationPipe(CreateCaseSchema)) dto: CreateCaseInput,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.casesService.create(dto, user.id);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all cases' })
-  async findAll(@Query('status') status?: string) {
-    console.log('📋 Getting all cases with status:', status);
-    return this.casesService.findAll(status);
+  @ApiOperation({
+    summary: 'List cases the caller may see (all of them for an admin)',
+  })
+  async findAll(
+    @CurrentUser() user: RequestUser,
+    @Query('status') status?: string,
+  ) {
+    return this.casesService.findAll(user, status);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get case by ID' })
-  async findOne(@Param('id') id: string) {
-    console.log('🔍 Getting case:', id);
-    return this.casesService.findOne(id);
+  @ApiOperation({ summary: 'Get a case by id' })
+  @ApiResponse({ status: 403, description: 'Not your case' })
+  async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.casesService.findOne(id, user);
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Update case' })
-  async update(@Param('id') id: string, @Body() dto: any) {
-    console.log('✏️ Updating case:', id);
-    console.log('📦 Update data received:', JSON.stringify(dto, null, 2));
-    
-    try {
-      // Валидация с помощью Zod
-      const validatedData = UpdateCaseSchema.parse(dto);
-      console.log('✅ Validated data:', JSON.stringify(validatedData, null, 2));
-      
-      return await this.casesService.update(id, validatedData);
-    } catch (error) {
-      console.error('❌ Validation error:', error);
-      
-      if (error.name === 'ZodError') {
-        throw new BadRequestException({
-          message: this.i18n.t('common.errors.validation_failed'),
-          errors: error.errors.map((e: any) => ({
-            field: e.path.join('.'),
-            message: e.message,
-          })),
-        });
-      }
-      
-      throw error;
-    }
+  @ApiOperation({ summary: 'Update a case' })
+  async update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateCaseSchema)) dto: UpdateCaseInput,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.casesService.update(id, dto, user);
   }
 
+  /**
+   * Admin only. Deleting a case cascades through its evidence, chain of
+   * custody and timeline — in a forensics platform that is destruction of the
+   * record, and it used to be available to anyone with an account.
+   */
+  @Roles('ADMIN')
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete case' })
-  async delete(@Param('id') id: string) {
-    console.log('🗑️ Deleting case:', id);
-    return this.casesService.delete(id);
+  @ApiOperation({
+    summary: 'Delete a case and everything under it (admin only)',
+  })
+  async delete(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.casesService.delete(id, user);
   }
 }

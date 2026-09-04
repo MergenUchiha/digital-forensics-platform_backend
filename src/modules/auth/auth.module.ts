@@ -12,10 +12,12 @@ import { UsersModule } from '../users/users.module';
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
+      // `getOrThrow`: env validation already refuses to boot without these,
+      // and a silently-undefined secret is worse than a crash.
       useFactory: (config: ConfigService) => ({
-        secret: config.get('JWT_SECRET'),
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: config.get('JWT_EXPIRES_IN'),
+          expiresIn: config.getOrThrow<string>('JWT_EXPIRES_IN'),
         },
       }),
     }),

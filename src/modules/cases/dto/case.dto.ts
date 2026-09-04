@@ -70,11 +70,7 @@ export const UpdateCaseSchema = z
       .array(z.string().min(1).max(50).trim())
       .max(20, 'Maximum 20 tags allowed')
       .optional(),
-    assignedToId: z
-      .string()
-      .uuid('Invalid user ID')
-      .nullable()
-      .optional(),
+    assignedToId: z.string().uuid('Invalid user ID').nullable().optional(),
   })
   .strict() // Prevent unknown fields
   .refine((data) => Object.keys(data).length > 0, {
@@ -83,9 +79,7 @@ export const UpdateCaseSchema = z
 
 // Query Parameters Schema
 export const CaseQuerySchema = z.object({
-  status: z
-    .enum(['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED'])
-    .optional(),
+  status: z.enum(['OPEN', 'IN_PROGRESS', 'CLOSED', 'ARCHIVED']).optional(),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   assignedToId: z.string().uuid().optional(),
   createdById: z.string().uuid().optional(),

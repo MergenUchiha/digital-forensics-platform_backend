@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { BCRYPT_ROUNDS } from '../auth/auth.service';
 import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
@@ -21,12 +22,15 @@ export class UsersService {
     name: string;
     role?: string;
   }) {
+    // The password arriving here is already hashed by AuthService.
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existing) {
-      throw new ConflictException(this.i18n.t('common.errors.user_already_exists'));
+      throw new ConflictException(
+        this.i18n.t('common.errors.user_already_exists'),
+      );
     }
 
     return this.prisma.user.create({
@@ -82,9 +86,7 @@ export class UsersService {
     });
   }
 
-  async updateProfile(userId: string, data: { name?: string }) {
-    console.log('Updating profile:', userId, data);
-    
+  async updateProfile(userId: string, data: { name: string }) {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -108,9 +110,6 @@ export class UsersService {
     currentPassword: string,
     newPassword: string,
   ) {
-    console.log('Changing password for user:', userId);
-
-    // Получаем пользователя с паролем
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -119,20 +118,19 @@ export class UsersService {
       throw new NotFoundException(this.i18n.t('common.errors.user_not_found'));
     }
 
-    // Проверяем текущий пароль
     const isPasswordValid = await bcrypt.compare(
       currentPassword,
       user.password,
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException(this.i18n.t('common.errors.current_password_incorrect'));
+      throw new UnauthorizedException(
+        this.i18n.t('common.errors.current_password_incorrect'),
+      );
     }
 
-    // Хешируем новый пароль
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
-    // Обновляем пароль
     await this.prisma.user.update({
       where: { id: userId },
       data: {

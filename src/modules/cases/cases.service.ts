@@ -1,8 +1,18 @@
 // src/modules/cases/cases.service.ts
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { rm } from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCaseInput, UpdateCaseInput } from './dto/case.dto';
 import { I18nService } from 'nestjs-i18n';
+import type { RequestUser } from '../../common/decorators/current-user.decorator';
+import { decodeCase } from '../../common/utils/json-columns';
 
 @Injectable()
 export class CasesService {
@@ -12,33 +22,6 @@ export class CasesService {
     private prisma: PrismaService,
     private readonly i18n: I18nService,
   ) {}
-
-  private parseJsonFields(data: any) {
-    if (!data) return data;
-    if (Array.isArray(data)) return data.map((item) => this.parseJsonFields(item));
-    if (typeof data.tags === 'string') {
-      try { data.tags = JSON.parse(data.tags); } catch { data.tags = []; }
-    }
-    if (data.timelineEvents) {
-      data.timelineEvents = data.timelineEvents.map((e: any) => {
-        for (const field of ['ipAddresses', 'usernames', 'files', 'devices', 'metadata']) {
-          if (typeof e[field] === 'string') {
-            try { e[field] = JSON.parse(e[field]); } catch { e[field] = field === 'metadata' ? null : []; }
-          }
-        }
-        return e;
-      });
-    }
-    if (data.evidence) {
-      data.evidence = data.evidence.map((e: any) => {
-        if (typeof e.metadata === 'string') {
-          try { e.metadata = JSON.parse(e.metadata); } catch { e.metadata = null; }
-        }
-        return e;
-      });
-    }
-    return data;
-  }
 
   /**
    * Normalize enum value to match Prisma schema
@@ -54,11 +37,41 @@ export class CasesService {
 
     if (!validValues.includes(normalized)) {
       throw new BadRequestException(
-        this.i18n.t('common.errors.invalid_enum', { args: { enumName, value, validValues: validValues.join(', ') } }),
+        this.i18n.t('common.errors.invalid_enum', {
+          args: { enumName, value, validValues: validValues.join(', ') },
+        }),
       );
     }
 
     return normalized;
+  }
+
+  /**
+   * An analyst sees the cases they opened and the ones assigned to them; an
+   * administrator sees everything.
+   *
+   * Before this, every authenticated user could read, edit and delete every
+   * case in the system — and deleting one cascades through its evidence, chain
+   * of custody and timeline.
+   */
+  private scopeFor(user: RequestUser): Prisma.CaseWhereInput | undefined {
+    if (user.role === 'ADMIN') return undefined;
+    return {
+      OR: [{ createdById: user.id }, { assignedToId: user.id }],
+    };
+  }
+
+  private assertAccess(
+    caseData: { createdById: string; assignedToId: string | null },
+    user: RequestUser,
+  ) {
+    if (user.role === 'ADMIN') return;
+    if (caseData.createdById === user.id || caseData.assignedToId === user.id) {
+      return;
+    }
+    throw new ForbiddenException(
+      this.i18n.t('common.errors.case_access_denied'),
+    );
   }
 
   async create(dto: CreateCaseInput, userId: string) {
@@ -99,12 +112,10 @@ export class CasesService {
         },
       },
     });
-    return this.parseJsonFields(result);
+    return decodeCase(result);
   }
 
-  async findAll(status?: string) {
-    this.logger.debug(`Finding all cases with status: ${status || 'all'}`);
-
+  async findAll(user: RequestUser, status?: string) {
     const normalizedStatus = status
       ? this.normalizeEnum(
           status,
@@ -113,8 +124,14 @@ export class CasesService {
         )
       : undefined;
 
+    const scope = this.scopeFor(user);
+    const where: Prisma.CaseWhereInput = {
+      ...(scope ?? {}),
+      ...(normalizedStatus ? { status: normalizedStatus } : {}),
+    };
+
     const results = await this.prisma.case.findMany({
-      where: normalizedStatus ? { status: normalizedStatus } : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       include: {
         createdBy: {
           select: { id: true, name: true, email: true, role: true },
@@ -125,12 +142,10 @@ export class CasesService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return this.parseJsonFields(results);
+    return results.map((row) => decodeCase(row));
   }
 
-  async findOne(id: string) {
-    this.logger.debug(`Finding case: ${id}`);
-
+  async findOne(id: string, user?: RequestUser) {
     const caseData = await this.prisma.case.findUnique({
       where: { id },
       include: {
@@ -162,21 +177,20 @@ export class CasesService {
     });
 
     if (!caseData) {
-      throw new NotFoundException(this.i18n.t('common.errors.case_not_found', { args: { id } }));
+      throw new NotFoundException(
+        this.i18n.t('common.errors.case_not_found', { args: { id } }),
+      );
     }
 
-    return this.parseJsonFields(caseData);
+    if (user) this.assertAccess(caseData, user);
+
+    return decodeCase(caseData);
   }
 
-  async update(id: string, dto: UpdateCaseInput) {
-    this.logger.log(`Updating case: ${id}`);
-    this.logger.debug(`Update data: ${JSON.stringify(dto)}`);
+  async update(id: string, dto: UpdateCaseInput, user: RequestUser) {
+    await this.findOne(id, user);
 
-    // Check if case exists
-    await this.findOne(id);
-
-    // Build update object
-    const updateData: any = {};
+    const updateData: Prisma.CaseUpdateInput = {};
 
     if (dto.title !== undefined) {
       updateData.title = dto.title.trim();
@@ -207,13 +221,15 @@ export class CasesService {
     }
 
     if (dto.assignedToId !== undefined) {
-      updateData.assignedToId = dto.assignedToId;
+      updateData.assignedTo = dto.assignedToId
+        ? { connect: { id: dto.assignedToId } }
+        : { disconnect: true };
     }
 
     // If no fields to update
     if (Object.keys(updateData).length === 0) {
       this.logger.warn(`No fields to update for case: ${id}`);
-      return this.findOne(id);
+      return this.findOne(id, user);
     }
 
     this.logger.debug(`Final update data: ${JSON.stringify(updateData)}`);
@@ -232,21 +248,25 @@ export class CasesService {
     });
 
     this.logger.log(`Case updated successfully: ${id}`);
-    return this.parseJsonFields(updatedCase);
+    return decodeCase(updatedCase);
   }
 
-  async delete(id: string) {
-    this.logger.log(`Deleting case: ${id}`);
+  async delete(id: string, user: RequestUser) {
+    await this.findOne(id, user);
 
-    // Check if case exists
-    await this.findOne(id);
+    this.logger.warn(`Case ${id} deleted by ${user.email}`);
 
-    // Use transaction to delete case and all related data
-    return this.prisma.$transaction(async (tx) => {
-      // Delete related timeline events
+    // Collect the file paths before the rows go, so the uploads can be removed
+    // afterwards. Deleting a case cascades through its evidence; leaving the
+    // files behind means orphaned artefacts with no chain of custody at all.
+    const files = await this.prisma.evidence.findMany({
+      where: { caseId: id, filePath: { not: null } },
+      select: { filePath: true },
+    });
+
+    const deleted = await this.prisma.$transaction(async (tx) => {
       await tx.timelineEvent.deleteMany({ where: { caseId: id } });
 
-      // Delete chain of custody entries for related evidence
       const evidence = await tx.evidence.findMany({
         where: { caseId: id },
         select: { id: true },
@@ -258,12 +278,21 @@ export class CasesService {
         });
       }
 
-      // Delete evidence
       await tx.evidence.deleteMany({ where: { caseId: id } });
 
-      // Delete case
       return tx.case.delete({ where: { id } });
     });
+
+    for (const { filePath } of files) {
+      if (!filePath) continue;
+      await rm(filePath, { force: true }).catch((error: Error) =>
+        this.logger.error(
+          `Could not remove evidence file ${filePath}: ${error.message}`,
+        ),
+      );
+    }
+
+    return deleted;
   }
 
   /**
@@ -272,16 +301,17 @@ export class CasesService {
   async updateStats(caseId: string) {
     this.logger.debug(`Updating stats for case: ${caseId}`);
 
-    const [evidenceCount, eventsCount, suspiciousActivities] = await Promise.all([
-      this.prisma.evidence.count({ where: { caseId } }),
-      this.prisma.timelineEvent.count({ where: { caseId } }),
-      this.prisma.timelineEvent.count({
-        where: {
-          caseId,
-          severity: { in: ['HIGH', 'CRITICAL'] },
-        },
-      }),
-    ]);
+    const [evidenceCount, eventsCount, suspiciousActivities] =
+      await Promise.all([
+        this.prisma.evidence.count({ where: { caseId } }),
+        this.prisma.timelineEvent.count({ where: { caseId } }),
+        this.prisma.timelineEvent.count({
+          where: {
+            caseId,
+            severity: { in: ['HIGH', 'CRITICAL'] },
+          },
+        }),
+      ]);
 
     return this.prisma.case.update({
       where: { id: caseId },

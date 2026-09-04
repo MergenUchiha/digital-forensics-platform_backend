@@ -1,10 +1,18 @@
 // prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { config as loadDotenv } from 'dotenv';
+import { randomBytes } from 'crypto';
+
+// `ts-node prisma/seed.ts` does not load .env by itself, unlike the Prisma
+// CLI, so DATABASE_URL and the admin credentials would be undefined here.
+loadDotenv();
 
 const prisma = new PrismaClient();
 
-// Предсказуемые UUID для демо-данных
+const BCRYPT_ROUNDS = 12;
+
+// Fixed UUIDs, so the demo data is stable across re-seeds.
 const DEMO_IDS = {
   users: {
     analyst: '00000000-0000-0000-0000-000000000001',
@@ -43,36 +51,48 @@ async function main() {
   await prisma.case.deleteMany();
   await prisma.user.deleteMany();
 
-  // Создание пользователей с предсказуемыми ID
-  console.log('👤 Creating users...');
-  const hashedPassword = await bcrypt.hash('REDACTED-ROTATE-SEED-PASSWORD', 10);
+  // The password comes from the environment. A seeded `REDACTED-ROTATE-SEED-PASSWORD` is a
+  // published credential that survives in every deployment nobody remembered
+  // to change — and this repository shipped the database file holding its
+  // hash, so it was published twice over.
+  const adminEmail = process.env.SEED_ADMIN_EMAIL;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 
+  if (!adminEmail || !adminPassword) {
+    throw new Error(
+      'SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be set. See .env.example.',
+    );
+  }
+  if (adminPassword.length < 12) {
+    throw new Error('SEED_ADMIN_PASSWORD must be at least 12 characters.');
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, BCRYPT_ROUNDS);
+
+  const admin = await prisma.user.create({
+    data: {
+      id: DEMO_IDS.users.admin,
+      email: adminEmail,
+      password: hashedPassword,
+      name: 'Administrator',
+      role: 'ADMIN',
+    },
+  });
+
+  // The demo analyst has no usable password: the account exists so the sample
+  // cases have an assignee, not so anyone can sign in as it.
   const analyst = await prisma.user.create({
     data: {
       id: DEMO_IDS.users.analyst,
-      email: 'analyst@forensics.io',
-      password: hashedPassword,
+      email: 'analyst@forensics.local',
+      password: await bcrypt.hash(randomBytes(32).toString('hex'), BCRYPT_ROUNDS),
       name: 'Alex Johnson',
       role: 'ANALYST',
     },
   });
 
-  const admin = await prisma.user.create({
-    data: {
-      id: DEMO_IDS.users.admin,
-      email: 'admin@forensics.io',
-      password: hashedPassword,
-      name: 'Sarah Admin',
-      role: 'ADMIN',
-    },
-  });
-
-  console.log('✅ Created users:');
-  console.log(`   - Analyst: ${analyst.email} (ID: ${analyst.id})`);
-  console.log(`   - Admin: ${admin.email} (ID: ${admin.id})`);
-
-  // Создание дел с предсказуемыми ID
-  console.log('\n📁 Creating cases...');
+  console.log(`Admin account ready: ${admin.email}`);
+  console.log(`Demo analyst (no password): ${analyst.email}`);
 
   const case1 = await prisma.case.create({
     data: {
@@ -845,22 +865,14 @@ async function main() {
 
   console.log('✅ Updated case statistics');
 
-  console.log('\n' + '='.repeat(60));
-  console.log('🎉 Seed completed successfully!');
-  console.log('='.repeat(60));
-  console.log('\n📝 Test credentials:');
-  console.log('   Email: analyst@forensics.io');
-  console.log('   Password: REDACTED-ROTATE-SEED-PASSWORD');
-  console.log('\n   Email: admin@forensics.io');
-  console.log('   Password: REDACTED-ROTATE-SEED-PASSWORD');
-  console.log('\n📁 Demo Case IDs (use these in your tests):');
+  console.log('Seed completed.');
+  console.log(`Sign in as ${adminEmail} with SEED_ADMIN_PASSWORD.`);
+  console.log('Demo case IDs:');
   console.log(`   - Case 1 (AWS S3): ${DEMO_IDS.cases.case1}`);
   console.log(`   - Case 2 (IoT): ${DEMO_IDS.cases.case2}`);
   console.log(`   - Case 3 (Azure): ${DEMO_IDS.cases.case3}`);
   console.log(`   - Case 4 (GCP): ${DEMO_IDS.cases.case4}`);
-  console.log('\n💡 Quick test URL:');
-  console.log(`   http://localhost:3000/cases/${DEMO_IDS.cases.case1}`);
-  console.log('='.repeat(60) + '\n');
+  console.log(`Open http://localhost:3000/cases/${DEMO_IDS.cases.case1}`);
 }
 
 main()

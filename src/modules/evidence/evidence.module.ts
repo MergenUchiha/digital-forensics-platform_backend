@@ -1,21 +1,12 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EvidenceService } from './evidence.service';
 import { EvidenceController } from './evidence.controller';
 import { CasesModule } from '../cases/cases.module';
 
 @Module({
-  imports: [
-    CasesModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET'),
-      }),
-      inject: [ConfigService],
-    }),
-  ],
+  // The JwtModule import is gone with the `?token=` download path: the file
+  // route uses the same guard as every other one now.
+  imports: [CasesModule],
   providers: [EvidenceService],
   controllers: [EvidenceController],
   exports: [EvidenceService],

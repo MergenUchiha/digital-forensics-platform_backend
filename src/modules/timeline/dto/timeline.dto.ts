@@ -31,6 +31,27 @@ export const UpdateTimelineEventSchema = z.object({
   metadata: z.record(z.any()).optional(),
 });
 
+/**
+ * Query filter. `severity` is validated rather than silently ignored when it
+ * does not match, and `limit` keeps an unbounded case from returning its whole
+ * timeline in one response.
+ */
+export const TimelineFilterSchema = z.object({
+  caseId: z.string().uuid('Invalid case ID').optional(),
+  severity: z
+    .string()
+    .transform((value) => value.toUpperCase())
+    .pipe(z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']))
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+export type TimelineFilterInput = z.infer<typeof TimelineFilterSchema>;
+
 // Types
-export type CreateTimelineEventInput = z.infer<typeof CreateTimelineEventSchema>;
-export type UpdateTimelineEventInput = z.infer<typeof UpdateTimelineEventSchema>;
+export type CreateTimelineEventInput = z.infer<
+  typeof CreateTimelineEventSchema
+>;
+export type UpdateTimelineEventInput = z.infer<
+  typeof UpdateTimelineEventSchema
+>;

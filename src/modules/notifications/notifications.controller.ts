@@ -1,9 +1,12 @@
 // src/modules/notifications/notifications.controller.ts
-import { Controller, Get, Put, Delete, Param, UseGuards, Req, Headers } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { NotificationsService } from './notifications.service';
-import { I18nLang } from 'nestjs-i18n';
+import {
+  CurrentUser,
+  type RequestUser,
+} from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Notifications')
 @Controller('notifications')
@@ -13,26 +16,28 @@ export class NotificationsController {
   constructor(private notificationsService: NotificationsService) {}
 
   @Get()
-  async getNotifications(@Req() req) {
-    console.log('Getting notifications for user:', req.user.id);
-    return this.notificationsService.getUserNotifications(req.user.id);
+  getNotifications(@CurrentUser() user: RequestUser) {
+    return this.notificationsService.getUserNotifications(user.id);
   }
 
   @Put(':id/read')
-  async markAsRead(@Req() req, @Param('id') id: string) {
-    await this.notificationsService.markAsRead(req.user.id, id);
+  markAsRead(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    this.notificationsService.markAsRead(user.id, id);
     return { message: 'ok' };
   }
 
   @Put('read-all')
-  async markAllAsRead(@Req() req) {
-    await this.notificationsService.markAllAsRead(req.user.id);
+  markAllAsRead(@CurrentUser() user: RequestUser) {
+    this.notificationsService.markAllAsRead(user.id);
     return { message: 'ok' };
   }
 
   @Delete(':id')
-  async deleteNotification(@Req() req, @Param('id') id: string) {
-    await this.notificationsService.deleteNotification(req.user.id, id);
+  deleteNotification(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ) {
+    this.notificationsService.deleteNotification(user.id, id);
     return { message: 'ok' };
   }
 }
