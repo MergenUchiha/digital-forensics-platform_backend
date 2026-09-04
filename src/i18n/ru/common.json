@@ -13,7 +13,8 @@
     "current_password_incorrect": "Текущий пароль неверный",
     "case_not_found": "Дело с ID {id} не найдено",
     "evidence_not_found": "Улика не найдена",
-    "invalid_enum": "Недопустимое значение {enumName}: {value}. Допустимые значения: {validValues}"
+    "invalid_enum": "Недопустимое значение {enumName}: {value}. Допустимые значения: {validValues}",
+    "case_access_denied": "У вас нет доступа к этому делу"
   },
   "success": {
     "password_updated": "Пароль успешно обновлён"

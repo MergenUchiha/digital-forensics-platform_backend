@@ -4,34 +4,69 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
+  type OnModuleDestroy,
 } from '@nestjs/common';
 import { Observable, tap, catchError, throwError } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { LogsService } from '../../logs/logs.service';
 
+type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+interface LogPayload {
+  source: string;
+  severity: Severity;
+  message: string;
+  ip: string;
+  user?: string;
+  action: string;
+  details: Record<string, unknown>;
+}
+
+const FLUSH_INTERVAL_MS = 1000;
+const BATCH_SIZE = 50;
+/**
+ * A bound on the backlog. The queue used to grow without limit while draining
+ * one entry per second, so any traffic above 1 req/s meant unbounded memory
+ * growth — and if the SIEM was unreachable it never drained at all.
+ */
+const MAX_QUEUE = 5000;
+
 @Injectable()
-export class SiemLoggerInterceptor implements NestInterceptor {
+export class SiemLoggerInterceptor implements NestInterceptor, OnModuleDestroy {
   private readonly logger = new Logger(SiemLoggerInterceptor.name);
   private readonly siemUrl: string;
   private readonly siemApiKey: string;
   private readonly enabled: boolean;
-  private queue: any[] = [];
+  private queue: LogPayload[] = [];
+  private dropped = 0;
   private isSending = false;
+  private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private configService: ConfigService,
     private logsService: LogsService,
   ) {
-    this.siemUrl = configService.get('SIEM_URL', 'http://localhost:5001');
-    this.siemApiKey = configService.get('SIEM_API_KEY', '');
-    this.enabled = !!this.siemApiKey;
+    this.siemUrl = configService.get<string>('SIEM_URL', '');
+    this.siemApiKey = configService.get<string>('SIEM_API_KEY', '');
+    this.enabled = Boolean(this.siemUrl && this.siemApiKey);
 
-    // Отправляем логи из очереди раз в 1 секунду
-    setInterval(() => this.flushOne(), 1000);
+    if (this.enabled) {
+      this.timer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
+      // Do not keep the process alive just to drain a log queue.
+      this.timer.unref?.();
+    }
   }
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  /** The interval used to be started in the constructor and never cleared. */
+  onModuleDestroy() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (!this.enabled) return next.handle();
 
     const req = context.switchToHttp().getRequest<Request>();
@@ -40,29 +75,31 @@ export class SiemLoggerInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap(() => {
         const res = context.switchToHttp().getResponse<Response>();
-        this.processLog(req, res.statusCode, Date.now() - startTime, null);
+        this.record(req, res.statusCode, Date.now() - startTime, null);
       }),
-      catchError((err) => {
-        const status = err.status || 500;
-        this.processLog(req, status, Date.now() - startTime, err);
-        return throwError(() => err);
-      }),
+      catchError(
+        (err: { status?: number; message?: string; name?: string }) => {
+          this.record(req, err.status ?? 500, Date.now() - startTime, err);
+          return throwError(() => err);
+        },
+      ),
     );
   }
 
-  private processLog(
+  private record(
     req: Request,
     statusCode: number,
     durationMs: number,
-    error: any,
+    error: { message?: string; name?: string } | null,
   ) {
-    const severity = this.mapSeverity(statusCode, error);
-    const payload = {
+    const user = (req as Request & { user?: { email?: string } }).user;
+
+    const payload: LogPayload = {
       source: 'Digital Forensics Platform',
-      severity,
+      severity: mapSeverity(statusCode, error),
       message: `${req.method} ${req.path} → ${statusCode} (${durationMs}ms)`,
       ip: (req.headers['x-forwarded-for'] as string) || req.ip || '0.0.0.0',
-      user: (req as any).user?.email || undefined,
+      user: user?.email,
       action: `${req.method} ${req.path}`,
       details: {
         method: req.method,
@@ -74,44 +111,62 @@ export class SiemLoggerInterceptor implements NestInterceptor {
       },
     };
 
-    // Сохраняем локально для Pull
     this.logsService.save(payload);
 
-    // Добавляем в очередь (отправится раз в 1 секунду)
+    if (this.queue.length >= MAX_QUEUE) {
+      this.dropped++;
+      return;
+    }
     this.queue.push(payload);
   }
 
-  private async flushOne() {
+  /** Sends a batch, and puts it back at the front if the SIEM is unreachable. */
+  private async flush() {
     if (this.isSending || this.queue.length === 0) return;
 
     this.isSending = true;
-    const payload = this.queue.shift();
+    const batch = this.queue.splice(0, BATCH_SIZE);
 
     try {
-      await fetch(`${this.siemUrl}/api/logs/ingest`, {
+      const response = await fetch(`${this.siemUrl}/api/logs/ingest`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': this.siemApiKey,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(batch),
         signal: AbortSignal.timeout(3000),
       });
-    } catch (err: any) {
-      this.logger.warn(`Failed to send log to SIEM: ${err.message}`);
+
+      if (!response.ok) {
+        this.logger.warn(`SIEM responded with HTTP ${response.status}`);
+      }
+
+      if (this.dropped > 0) {
+        this.logger.warn(
+          `Dropped ${this.dropped} log entries while the queue was full`,
+        );
+        this.dropped = 0;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to send logs to SIEM: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      if (this.queue.length + batch.length <= MAX_QUEUE) {
+        this.queue.unshift(...batch);
+      } else {
+        this.dropped += batch.length;
+      }
     } finally {
       this.isSending = false;
     }
   }
+}
 
-  private mapSeverity(
-    statusCode: number,
-    error: any,
-  ): 'critical' | 'high' | 'medium' | 'low' | 'info' {
-    if (statusCode >= 500) return 'critical';
-    if (statusCode === 401 || statusCode === 403) return 'high';
-    if (statusCode >= 400) return 'medium';
-    if (error) return 'high';
-    return 'info';
-  }
+function mapSeverity(statusCode: number, error: unknown): Severity {
+  if (statusCode >= 500) return 'critical';
+  if (statusCode === 401 || statusCode === 403) return 'high';
+  if (statusCode >= 400) return 'medium';
+  if (error) return 'high';
+  return 'info';
 }

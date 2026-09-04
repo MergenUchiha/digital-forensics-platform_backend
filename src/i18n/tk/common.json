@@ -13,7 +13,8 @@
     "current_password_incorrect": "Häzirki açar söz nädogry",
     "case_not_found": "ID {id} bolan iş tapylmady",
     "evidence_not_found": "Subutnama tapylmady",
-    "invalid_enum": "Nädogry {enumName}: {value}. Dogry bahalar: {validValues}"
+    "invalid_enum": "Nädogry {enumName}: {value}. Dogry bahalar: {validValues}",
+    "case_access_denied": "Bu işe girmäge rugsadyňyz ýok"
   },
   "success": {
     "password_updated": "Açar söz üstünlikli täzelendi"

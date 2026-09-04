@@ -13,7 +13,8 @@
     "current_password_incorrect": "Current password is incorrect",
     "case_not_found": "Case with ID {id} not found",
     "evidence_not_found": "Evidence not found",
-    "invalid_enum": "Invalid {enumName}: {value}. Valid values are: {validValues}"
+    "invalid_enum": "Invalid {enumName}: {value}. Valid values are: {validValues}",
+    "case_access_denied": "You do not have access to this case"
   },
   "success": {
     "password_updated": "Password updated successfully"

@@ -6,29 +6,31 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ConfigService } from '@nestjs/config';
 import * as morgan from 'morgan';
+import type { Request, Response } from 'express';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+    logger:
+      process.env.NODE_ENV === 'production'
+        ? ['error', 'warn', 'log']
+        : ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT', 5001);
-  const frontendUrl = configService.get(
-    'FRONTEND_URL',
-    'http://localhost:3002',
-  );
-  const nodeEnv = configService.get('NODE_ENV', 'development');
+  const port = configService.getOrThrow<number>('PORT');
+  const nodeEnv = configService.getOrThrow<string>('NODE_ENV');
 
-  // Enable CORS
+  // The list used to be hardcoded, and carried a production IP with a
+  // trailing slash — an origin never has one, so that entry could not match
+  // anything. `FRONTEND_URL` was read into a variable and never used.
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://157.173.103.216:5173/',
-    ],
+    origin: configService
+      .getOrThrow<string>('CORS_ORIGINS')
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/$/, ''))
+      .filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
@@ -68,16 +70,17 @@ async function bootstrap() {
   }
 
   // Health check endpoint
-  app.getHttpAdapter().get('/api/health', (req, res) => {
+  app.getHttpAdapter().get('/api/health', (_req: Request, res: Response) =>
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-    });
-  });
+    }),
+  );
 
-  // Swagger documentation
-  if (nodeEnv !== 'production') {
+  // Off by default in production: the schema of a forensics platform is a map
+  // of everything worth attacking.
+  if (configService.get<boolean>('SWAGGER_ENABLED')) {
     const config = new DocumentBuilder()
       .setTitle('Digital Forensics API')
       .setDescription('Backend API for Digital Forensics Platform')
@@ -104,13 +107,10 @@ async function bootstrap() {
 
   await app.listen(port, '0.0.0.0');
 
-  logger.log('\n' + '='.repeat(60));
-  logger.log(`🚀 Server is running on http://localhost:${port}`);
-  logger.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
-  logger.log(`🔍 API Endpoint: http://localhost:${port}/api`);
-  logger.log(`💚 Health Check: http://localhost:${port}/api/health`);
-  logger.log(`🌍 Environment: ${nodeEnv}`);
-  logger.log('='.repeat(60) + '\n');
+  logger.log(`API listening on http://localhost:${port}/api (${nodeEnv})`);
+  if (configService.get<boolean>('SWAGGER_ENABLED')) {
+    logger.log(`Swagger UI at http://localhost:${port}/api/docs`);
+  }
 }
 
 bootstrap().catch((error) => {

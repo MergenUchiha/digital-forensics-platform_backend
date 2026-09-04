@@ -22,8 +22,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const i18n = I18nContext.current(host);
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = i18n?.t('common.errors.internal_server_error') || 'Internal server error';
-    let errors: any[] = [];
+    let message =
+      i18n?.t('common.errors.internal_server_error') || 'Internal server error';
+    let errors: Array<Record<string, unknown>> = [];
 
     // Handle different exception types
     if (exception instanceof HttpException) {
@@ -31,14 +32,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        message = (exceptionResponse as any).message || message;
-        errors = (exceptionResponse as any).errors || [];
+        const body = exceptionResponse as {
+          message?: unknown;
+          errors?: unknown;
+        };
+        if (typeof body.message === 'string') message = body.message;
+        if (Array.isArray(body.message)) message = body.message.join(', ');
+        if (Array.isArray(body.errors)) {
+          errors = body.errors as Array<Record<string, unknown>>;
+        }
       } else {
-        message = exceptionResponse as string;
+        message = exceptionResponse;
       }
     } else if (exception instanceof ZodError) {
       status = HttpStatus.BAD_REQUEST;
-      message = i18n?.t('common.errors.validation_failed') || 'Validation failed';
+      message =
+        i18n?.t('common.errors.validation_failed') || 'Validation failed';
       errors = exception.errors.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
@@ -50,15 +59,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
       switch (exception.code) {
         case 'P2002':
-          message = i18n?.t('common.errors.unique_constraint') || 'Unique constraint violation';
-          errors = [{ field: (exception.meta?.target as string[])?.[0], message: i18n?.t('common.errors.already_exists') || 'Already exists' }];
+          message =
+            i18n?.t('common.errors.unique_constraint') ||
+            'Unique constraint violation';
+          errors = [
+            {
+              field: (exception.meta?.target as string[])?.[0],
+              message:
+                i18n?.t('common.errors.already_exists') || 'Already exists',
+            },
+          ];
           break;
         case 'P2025':
           status = HttpStatus.NOT_FOUND;
-          message = i18n?.t('common.errors.record_not_found') || 'Record not found';
+          message =
+            i18n?.t('common.errors.record_not_found') || 'Record not found';
           break;
         case 'P2003':
-          message = i18n?.t('common.errors.foreign_key_constraint') || 'Foreign key constraint failed';
+          message =
+            i18n?.t('common.errors.foreign_key_constraint') ||
+            'Foreign key constraint failed';
           break;
         default:
           message = i18n?.t('common.errors.database_error') || 'Database error';
@@ -80,7 +100,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }),
     };
 
-    if (status >= 500) {
+    if (Number(status) >= 500) {
       this.logger.error(errorLog);
     } else {
       this.logger.warn(errorLog);
